@@ -77,7 +77,6 @@ def record_audio():
 
 
         remainder = len(buffer) - idx
-        print(idx, remainder, frame_count, len(buffer), buffer.shape)
         if remainder == 0:
             write_file(buffer)
             idx = 0
@@ -97,8 +96,7 @@ def record_audio():
             x = 0
 
 def write_file(buffer): 
-    # schedule the next call first
-    print('writing')
+    print('writing buffer to file')
 
     if args.samplerate is None:
         device_info = sd.query_devices(args.device, 'input')
