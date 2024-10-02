@@ -63,7 +63,7 @@ args = parser.parse_args(remaining)
 frames = args.samplerate * args.duration
 
 
-def record_unlimited():
+def record_audio():
     idx = 0
     buffer = np.empty((frames, args.channels), dtype='float32')
 
@@ -112,7 +112,7 @@ def write_file(buffer):
     sf.write(filename, buffer, samplerate=args.samplerate, subtype=args.subtype)
 
 try:
-    record_unlimited()
+    record_audio()
 except KeyboardInterrupt:
     print('\nRecording finished.')
     parser.exit(0)
