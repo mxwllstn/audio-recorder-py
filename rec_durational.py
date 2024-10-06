@@ -2,12 +2,7 @@
 
 """Create continuous recordings with a set duration.
 
-The soundfile module (https://python-soundfile.readthedocs.io/)
-has to be installed!
-
-"""
-
-"""Adapted from these example files
+Adapted from these example files
 
 - https://github.com/spatialaudio/python-sounddevice/blob/master/examples/rec_unlimited.py
 - https://github.com/spatialaudio/python-sounddevice/blob/master/examples/asyncio_coroutines.py
@@ -20,6 +15,8 @@ import sys
 import sounddevice as sd
 import soundfile as sf
 import numpy as np  # Make sure NumPy is loaded before it is used in the callback
+
+import queue
 
 import datetime
 from datetime import datetime
@@ -62,27 +59,47 @@ args = parser.parse_args(remaining)
 
 frames = args.samplerate * args.duration
 
+if args.samplerate is None:
+    device_info = sd.query_devices(args.device, 'input')
+    # soundfile expects an int, sounddevice provides a float:
+    args.samplerate = int(device_info['default_samplerate'])
+
+def init_file():
+    global file
+    if args.filename is None:
+        date_format="%Y%m%d-%H%M%S"
+        timestamp = datetime.now().strftime(date_format)
+        filename = '' + timestamp + '.wav'
+
+    print('initializing file ' + filename)
+
+    file = sf.SoundFile(filename, mode='x', samplerate=args.samplerate,
+                      channels=args.channels, subtype=args.subtype)
+
+init_file()
 
 def record_audio():
     idx = 0
-    buffer = np.empty((frames, args.channels), dtype='float32')
+    buffer_length = frames
+    q = queue.Queue()
 
     def callback(indata, frame_count, time, status):
         """This is called (from a separate thread) for each audio block."""
 
-        nonlocal idx
+        nonlocal idx, buffer_length
         
         if status:
             print(status, file=sys.stderr)
 
+        q.put(indata.copy())
 
-        remainder = len(buffer) - idx
+        remainder = buffer_length - idx
         if remainder == 0:
-            write_file(buffer)
             idx = 0
+            buffer_length = frames
+            init_file()
 
         indata = indata[:remainder]
-        buffer[idx:idx + len(indata)] = indata
         idx += len(indata)
 
     with sd.InputStream(samplerate=args.samplerate, device=args.device,
@@ -93,22 +110,9 @@ def record_audio():
         print('#' * 80)
 
         while True:
-            x = 0
-
-def write_file(buffer): 
-    print('writing buffer to file')
-
-    if args.samplerate is None:
-        device_info = sd.query_devices(args.device, 'input')
-        # soundfile expects an int, sounddevice provides a float:
-        args.samplerate = int(device_info['default_samplerate'])
-    if args.filename is None:
-        date_format="%Y%m%d-%H%M%S"
-        timestamp = datetime.now().strftime(date_format)
-        filename = '' + timestamp + '.wav'
-
-    sf.write(filename, buffer, samplerate=args.samplerate, subtype=args.subtype)
-
+            file.write(q.get())
+            file.flush()
+ 
 try:
     record_audio()
 except KeyboardInterrupt:
